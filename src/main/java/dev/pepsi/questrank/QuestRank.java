@@ -1,6 +1,7 @@
 package dev.pepsi.questrank;
 
 import dev.pepsi.questrank.config.QuestRankConfig;
+import dev.pepsi.questrank.server.ServerRankingHooks;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
@@ -15,6 +16,7 @@ public class QuestRank {
 
     public QuestRank(ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, QuestRankConfig.SPEC);
+        ServerRankingHooks.register();
         LOGGER.info("QuestRank initialized");
     }
 }
