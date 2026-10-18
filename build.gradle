@@ -36,6 +36,8 @@ repositories {
         name = 'Architectury'
         url = 'https://maven.architectury.dev'
     }
+    // Pruebas unitarias del núcleo puro (F2): JUnit 5 desde Maven Central.
+    mavenCentral()
 }
 
 base {
@@ -157,6 +159,11 @@ dependencies {
     localRuntime "dev.ftb.mods:ftb-quests-neoforge:${ftb_quests_version}"
     localRuntime "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
     localRuntime "dev.architectury:architectury-neoforge:${architectury_version}"
+
+    // Pruebas unitarias del núcleo puro (F2): JUnit 5 con el task `test` estándar.
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -202,6 +209,10 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+test {
+    useJUnitPlatform()
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
