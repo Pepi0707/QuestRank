@@ -1,6 +1,9 @@
 package dev.pepsi.questrank;
 
+import dev.pepsi.questrank.config.QuestRankConfig;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -10,7 +13,8 @@ public class QuestRank {
     public static final String MOD_ID = "questrank";
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    public QuestRank() {
+    public QuestRank(ModContainer modContainer) {
+        modContainer.registerConfig(ModConfig.Type.COMMON, QuestRankConfig.SPEC);
         LOGGER.info("QuestRank initialized");
     }
 }
