@@ -1,0 +1,21 @@
+{
+  "questrank.screen.title": "Ranking",
+  "questrank.state.loading": "Loading ranking...",
+  "questrank.state.error": "Could not load the ranking",
+  "questrank.state.empty": "No participants",
+  "questrank.state.empty_catalog": "No scoring quests",
+  "questrank.state.stale": "Possibly outdated",
+  "questrank.state.truncated": "Showing %s of %s participants",
+  "questrank.state.ids_exhausted": "Request limit reached",
+  "questrank.button.retry": "Retry",
+  "questrank.button.refresh": "Refresh",
+  "questrank.kind.party": "Group",
+  "questrank.kind.player": "Player",
+  "questrank.tooltip.members": "Members",
+  "questrank.tooltip.offline": "offline",
+  "questrank.tooltip.more_members": "+%s more not detailed",
+  "sidebar_button.questrank.ranking": "QuestRank",
+  "key.categories.questrank": "QuestRank",
+  "key.questrank.open": "Open ranking",
+  "key.questrank.refresh": "Refresh ranking"
+}

@@ -1,0 +1,21 @@
+{
+  "questrank.screen.title": "Clasificación",
+  "questrank.state.loading": "Cargando clasificación...",
+  "questrank.state.error": "No se pudo obtener la clasificación",
+  "questrank.state.empty": "Sin participantes",
+  "questrank.state.empty_catalog": "Sin misiones computables",
+  "questrank.state.stale": "Posiblemente obsoleto",
+  "questrank.state.truncated": "Mostrando %s de %s participantes",
+  "questrank.state.ids_exhausted": "Límite de solicitudes alcanzado",
+  "questrank.button.retry": "Reintentar",
+  "questrank.button.refresh": "Actualizar",
+  "questrank.kind.party": "Grupo",
+  "questrank.kind.player": "Jugador",
+  "questrank.tooltip.members": "Miembros",
+  "questrank.tooltip.offline": "desconectado",
+  "questrank.tooltip.more_members": "+%s más sin detallar",
+  "sidebar_button.questrank.ranking": "QuestRank",
+  "key.categories.questrank": "QuestRank",
+  "key.questrank.open": "Abrir clasificación",
+  "key.questrank.refresh": "Actualizar clasificación"
+}

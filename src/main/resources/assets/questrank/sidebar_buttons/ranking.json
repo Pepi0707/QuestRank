@@ -1,0 +1,12 @@
+{
+  "icon": [
+    "questrank:icons/ranking"
+  ],
+  "click": [
+    "custom:questrank:open"
+  ],
+  "required_mods": [
+    "questrank"
+  ],
+  "sort_index": 120
+}
