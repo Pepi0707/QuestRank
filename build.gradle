@@ -164,6 +164,11 @@ dependencies {
     testImplementation platform("org.junit:junit-bom:${junit_version}")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+    // F5-A: las pruebas del protocolo codifican/decodifican con las clases reales de red del
+    // juego. No añade dependencias nuevas: reutiliza tal cual el classpath ya fijado de la
+    // fuente principal (§11.1, resuelto por ModDevGradle).
+    testImplementation files(sourceSets.main.compileClasspath)
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
