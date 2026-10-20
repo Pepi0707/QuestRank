@@ -44,13 +44,17 @@ The ranking is opened from the FTB Library sidebar button or the configured key.
 - CustomSkinLoader is not a dependency. CSL 15.1 with an Ely.by skin was verified
   manually; other CSL sources and premium-account skins are not exhaustively verified.
 - The 100-participant scale test used a synthetic fixture. Measured payload was
-  6,798 bytes (body before compression); 1 MiB enforcement was not demonstrated.
+  6,798 bytes (body before compression); the first request took 27.12 ms with a
+  cold cache and later requests about 2.5 ms. These are reference measurements,
+  not guarantees. 1 MiB enforcement was not demonstrated.
 - FTB Quests administrative resets and team merge/split semantics are reflected as-is;
   QuestRank does not compensate or reinterpret them.
 
 ## License
 
 QuestRank is licensed under the MIT License. See [LICENSE](LICENSE).
+
+Copyright (c) 2026 QuestRank contributors.
 
 Files originating from the NeoForge MDK retain their separate MIT attribution in
 [TEMPLATE_LICENSE.txt](TEMPLATE_LICENSE.txt).
