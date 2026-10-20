@@ -3,7 +3,6 @@ package dev.pepsi.questrank.client.skin;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
@@ -13,7 +12,11 @@ import java.util.function.LongSupplier;
  *
  * <p>La resolución es asíncrona y delegada (en producción, {@code SkinManager.getOrLoad} de la API
  * vanilla); esta clase no descarga nada, no usa CustomSkinLoader y no crea hilos. El render nunca
- * bloquea: consulta {@link #peek(UUID)} y, si aún no está, solicita la carga.
+ * bloquea: consulta {@link #peek(SkinRequest)} y, si aún no está, solicita la carga.
+ *
+ * <p>La clave incluye UUID y nombre. El UUID identifica al jugador; el nombre permite que las
+ * fuentes que resuelven por nombre (CustomSkinLoader/Mojang/Legacy) reciban un perfil útil y evita
+ * reutilizar una skin antigua si el nombre cambia.
  *
  * <p>Tras una carga fallida se aplica un backoff acotado antes de reintentar: la primera
  * observación del fallo fija el momento de reintento y no se vuelve a llamar al loader hasta que
@@ -28,15 +31,15 @@ public final class SkinCache<T> {
     public static final long RETRY_BACKOFF_MILLIS = 5_000L;
 
     private final int capacity;
-    private final Function<UUID, CompletableFuture<T>> loader;
+    private final Function<SkinRequest, CompletableFuture<T>> loader;
     private final LongSupplier clock;
-    private final Map<UUID, Entry<T>> cache;
+    private final Map<SkinRequest, Entry<T>> cache;
 
-    public SkinCache(int capacity, Function<UUID, CompletableFuture<T>> loader) {
+    public SkinCache(int capacity, Function<SkinRequest, CompletableFuture<T>> loader) {
         this(capacity, loader, System::currentTimeMillis);
     }
 
-    SkinCache(int capacity, Function<UUID, CompletableFuture<T>> loader, LongSupplier clock) {
+    SkinCache(int capacity, Function<SkinRequest, CompletableFuture<T>> loader, LongSupplier clock) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be >= 1: " + capacity);
         }
@@ -45,7 +48,7 @@ public final class SkinCache<T> {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.cache = new LinkedHashMap<>(capacity, 0.75f, true) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<UUID, Entry<T>> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<SkinRequest, Entry<T>> eldest) {
                 return size() > SkinCache.this.capacity;
             }
         };
@@ -55,8 +58,8 @@ public final class SkinCache<T> {
      * Resultado ya disponible, sin disparar carga; {@code null} si no está cacheado, si aún no
      * ha terminado o si la carga falló. La primera observación de un fallo programa el backoff.
      */
-    public synchronized T peek(UUID playerId) {
-        Entry<T> entry = cache.get(playerId);
+    public synchronized T peek(SkinRequest request) {
+        Entry<T> entry = cache.get(request);
         if (entry == null) {
             return null;
         }
@@ -72,12 +75,12 @@ public final class SkinCache<T> {
      * que expira el backoff; las peticiones concurrentes que expiran el backoff reutilizan la
      * única carga nueva creada por la primera de ellas.
      */
-    public synchronized CompletableFuture<T> request(UUID playerId) {
+    public synchronized CompletableFuture<T> request(SkinRequest request) {
         long now = clock.getAsLong();
-        Entry<T> entry = cache.get(playerId);
+        Entry<T> entry = cache.get(request);
         if (entry == null) {
-            Entry<T> created = new Entry<>(load(playerId));
-            cache.put(playerId, created);
+            Entry<T> created = new Entry<>(load(request));
+            cache.put(request, created);
             return created.future;
         }
         if (!entry.future.isCompletedExceptionally()) {
@@ -91,8 +94,8 @@ public final class SkinCache<T> {
         if (now < entry.retryAfterMillis) {
             return entry.future;
         }
-        Entry<T> replacement = new Entry<>(load(playerId));
-        cache.put(playerId, replacement);
+        Entry<T> replacement = new Entry<>(load(request));
+        cache.put(request, replacement);
         return replacement.future;
     }
 
@@ -116,8 +119,8 @@ public final class SkinCache<T> {
         }
     }
 
-    private CompletableFuture<T> load(UUID playerId) {
-        CompletableFuture<T> future = loader.apply(playerId);
+    private CompletableFuture<T> load(SkinRequest request) {
+        CompletableFuture<T> future = loader.apply(request);
         return future != null
                 ? future
                 : CompletableFuture.failedFuture(new NullPointerException("skin loader returned null"));

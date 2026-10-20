@@ -1,6 +1,7 @@
 package dev.pepsi.questrank.client.ui;
 
 import dev.pepsi.questrank.client.skin.SkinCache;
+import dev.pepsi.questrank.client.skin.SkinRequest;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -185,12 +186,13 @@ public final class RankingRowRenderer {
 
     private static void drawFace(GuiGraphics graphics, RankingRow.MemberFace face, int x, int y) {
         SkinCache<PlayerSkin> cache = ClientSkins.cache();
-        PlayerSkin skin = cache.peek(face.id());
+        SkinRequest request = new SkinRequest(face.id(), face.name());
+        PlayerSkin skin = cache.peek(request);
         if (skin != null) {
             net.minecraft.client.gui.components.PlayerFaceRenderer.draw(graphics, skin, x, y,
                     QuestRankTheme.FACE_SIZE);
         } else {
-            cache.request(face.id());
+            cache.request(request);
             drawPlaceholderFace(graphics, x, y);
         }
     }
@@ -206,8 +208,8 @@ public final class RankingRowRenderer {
     private static final class ClientSkins {
 
         private static final SkinCache<PlayerSkin> CACHE = new SkinCache<>(SkinCache.DEFAULT_CAPACITY,
-                id -> Minecraft.getInstance().getSkinManager().getOrLoad(
-                        new com.mojang.authlib.GameProfile(id, id.toString())));
+                request -> Minecraft.getInstance().getSkinManager().getOrLoad(
+                        new com.mojang.authlib.GameProfile(request.id(), request.profileName())));
 
         static SkinCache<PlayerSkin> cache() {
             return CACHE;
