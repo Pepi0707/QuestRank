@@ -168,15 +168,24 @@ public final class ClientRankingSession {
         maybeKeepAlive(now);
     }
 
+    /** Resultado explícito del intento de aplicar un snapshot (§9.8/§9.9). */
+    public enum SnapshotOutcome {
+        APPLIED,
+        IGNORED_REVISION,
+        DISCARDED_UNKNOWN_EPOCH,
+        DISCARDED_FOREIGN_EPOCH
+    }
+
     /** Aplicación de estado A1–A4 + monotonía §9.8 + pushes C1–C2. */
-    public void onSnapshot(RankingSnapshotPayload payload) {
+    public SnapshotOutcome onSnapshot(RankingSnapshotPayload payload) {
         boolean correlated = finalizeRequest(payload.requestId());
         Long epoch = knownEpoch;
         if (epoch == null) {
             if (correlated) {
                 adopt(payload);
+                return SnapshotOutcome.APPLIED;
             }
-            return; // A1: sin correlación se descarta
+            return SnapshotOutcome.DISCARDED_UNKNOWN_EPOCH; // A1: sin correlación se descarta
         }
         if (payload.epoch() == epoch) {
             boolean advanced = payload.rev() > knownRev;
@@ -190,14 +199,15 @@ public final class ClientRankingSession {
             if (correlated || advanced) {
                 confirmSession(correlated);
             }
-            return;
+            return advanced ? SnapshotOutcome.APPLIED : SnapshotOutcome.IGNORED_REVISION;
         }
         if (correlated) {
             adopt(payload); // A3: nueva sesión, caché anterior descartada
-        } else {
-            invalidate(true); // C2: push con epoch distinto ⇒ descartar + recuperación
-            LOGGER.debug("QuestRank client: push with foreign epoch discarded");
+            return SnapshotOutcome.APPLIED;
         }
+        invalidate(true); // C2: push con epoch distinto ⇒ descartar + recuperación
+        LOGGER.debug("QuestRank client: push with foreign epoch discarded");
+        return SnapshotOutcome.DISCARDED_FOREIGN_EPOCH;
     }
 
     /** B4: `RankingUnchanged` solo válido con epoch y rev conocidos coincidentes. */

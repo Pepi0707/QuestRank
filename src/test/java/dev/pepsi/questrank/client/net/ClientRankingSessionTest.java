@@ -42,7 +42,8 @@ class ClientRankingSessionTest {
         assertEquals(List.of("request:1", "subscribe:true"), transport.order,
                 "solicitud antes o junto con la suscripción (D4)");
         assertNull(transport.requests.get(0).knownEpoch());
-        session.onSnapshot(snapshot(1L, EPOCH, 1L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.APPLIED,
+                session.onSnapshot(snapshot(1L, EPOCH, 1L)));
         ClientSessionView view = session.view();
         assertTrue(view.sessionValid());
         assertTrue(view.hasData());
@@ -57,7 +58,8 @@ class ClientRankingSessionTest {
         ClientRankingSession session = new ClientRankingSession(transport, clock);
         session.onConnect();
         session.open();
-        session.onSnapshot(snapshot(0L, EPOCH, 1L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.DISCARDED_UNKNOWN_EPOCH,
+                session.onSnapshot(snapshot(0L, EPOCH, 1L)));
         assertFalse(session.view().hasData());
         assertNull(session.view().knownEpoch());
     }
@@ -65,12 +67,15 @@ class ClientRankingSessionTest {
     @Test
     void sameEpochAppliesMonotonicity() {
         ClientRankingSession session = establish(1L);
-        session.onSnapshot(snapshot(0L, EPOCH, 3L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.APPLIED,
+                session.onSnapshot(snapshot(0L, EPOCH, 3L)));
         assertEquals(3L, session.view().knownRev());
         RankingSnapshotPayload rev3 = session.view().data();
-        session.onSnapshot(snapshot(0L, EPOCH, 3L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.IGNORED_REVISION,
+                session.onSnapshot(snapshot(0L, EPOCH, 3L)));
         assertSame(rev3, session.view().data(), "rev igual se ignora");
-        session.onSnapshot(snapshot(0L, EPOCH, 2L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.IGNORED_REVISION,
+                session.onSnapshot(snapshot(0L, EPOCH, 2L)));
         assertSame(rev3, session.view().data(), "rev menor se descarta");
         assertEquals(3L, session.view().knownRev());
     }
@@ -78,7 +83,8 @@ class ClientRankingSessionTest {
     @Test
     void foreignEpochPushIsDiscardedMarksStaleAndRecoversImmediately() {
         ClientRankingSession session = establish(1L);
-        session.onSnapshot(snapshot(0L, EPOCH + 1, 5L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.DISCARDED_FOREIGN_EPOCH,
+                session.onSnapshot(snapshot(0L, EPOCH + 1, 5L)));
         assertFalse(session.view().sessionValid());
         assertTrue(session.view().possiblyStale());
         assertEquals(Long.valueOf(EPOCH), session.view().knownEpoch());
@@ -92,9 +98,11 @@ class ClientRankingSessionTest {
         ClientRankingSession session = establish(1L);
         session.refresh();
         long id = transport.lastRequestId();
-        session.onSnapshot(snapshot(0L, EPOCH + 1, 5L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.DISCARDED_FOREIGN_EPOCH,
+                session.onSnapshot(snapshot(0L, EPOCH + 1, 5L)));
         assertEquals(Long.valueOf(EPOCH), session.view().knownEpoch(), "push sin correlación no adopta (A3)");
-        session.onSnapshot(snapshot(id, EPOCH + 1, 5L));
+        assertEquals(ClientRankingSession.SnapshotOutcome.APPLIED,
+                session.onSnapshot(snapshot(id, EPOCH + 1, 5L)));
         assertEquals(Long.valueOf(EPOCH + 1), session.view().knownEpoch());
         assertEquals(5L, session.view().knownRev());
         assertTrue(session.view().sessionValid());

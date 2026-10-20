@@ -1,5 +1,6 @@
 package dev.pepsi.questrank.net;
 
+import dev.pepsi.questrank.diagnostics.RankingDiagnostics;
 import dev.pepsi.questrank.server.net.ServerSyncHooks;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -25,7 +26,8 @@ public final class QuestRankNetworking {
         registrar.playToServer(RankingSubscribePayload.TYPE, RankingSubscribePayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> ServerSyncHooks.handleSubscribe(context, payload)));
 
-        registrar.playToClient(RankingSnapshotPayload.TYPE, RankingSnapshotPayload.CODEC,
+        registrar.playToClient(RankingSnapshotPayload.TYPE,
+                RankingDiagnostics.measuredSnapshotCodec(RankingSnapshotPayload.CODEC),
                 (payload, context) -> context.enqueueWork(() -> ClientReceiverHook.receiveSnapshot(payload)));
         registrar.playToClient(RankingUnchangedPayload.TYPE, RankingUnchangedPayload.CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientReceiverHook.receiveUnchanged(payload)));

@@ -1,5 +1,6 @@
 package dev.pepsi.questrank.server.net;
 
+import dev.pepsi.questrank.diagnostics.RankingDiagnostics;
 import dev.pepsi.questrank.net.RankingErrorPayload;
 import dev.pepsi.questrank.net.RankingRequestPayload;
 import dev.pepsi.questrank.net.RankingSnapshotPayload;
@@ -51,6 +52,10 @@ public final class ServerSyncService {
     private final Map<UUID, PlayerState> players = new HashMap<>();
     private ServiceSnapshot latest;
     private int subscribers;
+    private long diagDirectSnapshots;
+    private long diagUnchanged;
+    private long diagErrors;
+    private long diagPushesSent;
 
     public ServerSyncService(RankingService service, SyncTransport transport, TimeSource time) {
         this.service = Objects.requireNonNull(service, "service");
@@ -62,12 +67,20 @@ public final class ServerSyncService {
 
     /** Desvincula el servicio (parada o reemplazo): sin contadores ni referencias vivas. */
     public void detach() {
+        RankingDiagnostics.logSummary(RankingDiagnostics.syncSummaryLine(
+                latest == null ? -1L : latest.epoch(),
+                latest == null ? -1L : latest.rev(),
+                diagDirectSnapshots, diagUnchanged, diagErrors, diagPushesSent, subscribers));
         service.setSnapshotListener(snapshot -> {
         });
         service.setSubscriberCount(0);
         players.clear();
         subscribers = 0;
         latest = null;
+        diagDirectSnapshots = 0L;
+        diagUnchanged = 0L;
+        diagErrors = 0L;
+        diagPushesSent = 0L;
     }
 
     /** Número de jugadores suscritos (uso interno y de pruebas). */
@@ -99,6 +112,7 @@ public final class ServerSyncService {
         // Fail-fast: una anomalía interna del pipeline de F4 se propaga (decisión A-3).
         // H-1: el solicitante queda excluido del fan-out del snapshot que su propia petición
         // publique; recibirá la respuesta directa con el eco de su requestId.
+        boolean diag = RankingDiagnostics.enabled();
         state.requestInFlight = true;
         RankingResult result;
         try {
@@ -107,14 +121,32 @@ public final class ServerSyncService {
             state.requestInFlight = false;
         }
         if (result instanceof RankingResult.Unchanged) {
+            diagUnchanged++;
+            long sendStart = diag ? System.nanoTime() : 0L;
             transport.send(playerId, new RankingUnchangedPayload(request.requestId(), request.knownEpoch(), request.knownRev()));
+            if (diag) {
+                RankingDiagnostics.directResponse(request.requestId(), request.knownEpoch(), request.knownRev(),
+                        "unchanged", System.nanoTime() - sendStart);
+            }
         } else if (result instanceof RankingResult.Snapshot snapshotResult) {
             RankingSnapshotPayload payload = toPayload(request.requestId(), snapshotResult.snapshot());
             state.lastSentEpoch = payload.epoch();
             state.lastSentRev = payload.rev();
+            diagDirectSnapshots++;
+            long sendStart = diag ? System.nanoTime() : 0L;
             transport.send(playerId, payload);
+            if (diag) {
+                RankingDiagnostics.directResponse(request.requestId(), payload.epoch(), payload.rev(),
+                        "snapshot", System.nanoTime() - sendStart);
+            }
         } else if (result instanceof RankingResult.Error error) {
+            diagErrors++;
+            long sendStart = diag ? System.nanoTime() : 0L;
             transport.send(playerId, new RankingErrorPayload(request.requestId(), codeFor(error.kind())));
+            if (diag) {
+                RankingDiagnostics.directResponse(request.requestId(), -1L, -1L,
+                        "error", System.nanoTime() - sendStart);
+            }
         }
     }
 
@@ -175,11 +207,18 @@ public final class ServerSyncService {
 
     private void sendPush(UUID playerId, PlayerState state, ServiceSnapshot snapshot, long now) {
         RankingSnapshotPayload payload = toPayload(0L, snapshot);
+        boolean diag = RankingDiagnostics.enabled();
+        long sendStart = diag ? System.nanoTime() : 0L;
+        diagPushesSent++;
         transport.send(playerId, payload);
         state.lastPushMillis = now;
         state.lastSentEpoch = payload.epoch();
         state.lastSentRev = payload.rev();
         state.pushPending = false;
+        if (diag) {
+            RankingDiagnostics.push(playerId, payload.epoch(), payload.rev(),
+                    payload.participantCount(), System.nanoTime() - sendStart);
+        }
         LOGGER.debug("QuestRank sync: push epoch={} rev={}", payload.epoch(), payload.rev());
     }
 
@@ -203,6 +242,20 @@ public final class ServerSyncService {
 
     private PlayerState state(UUID playerId) {
         return players.computeIfAbsent(playerId, id -> new PlayerState(time.nowMillis()));
+    }
+
+    DiagnosticCounters diagnosticCounters() {
+        return new DiagnosticCounters(diagDirectSnapshots, diagUnchanged, diagErrors, diagPushesSent);
+    }
+
+    String diagnosticSummaryLine() {
+        return RankingDiagnostics.syncSummaryLine(
+                latest == null ? -1L : latest.epoch(),
+                latest == null ? -1L : latest.rev(),
+                diagDirectSnapshots, diagUnchanged, diagErrors, diagPushesSent, subscribers);
+    }
+
+    record DiagnosticCounters(long directSnapshots, long unchanged, long errors, long pushesSent) {
     }
 
     private static final class PlayerState {

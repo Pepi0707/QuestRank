@@ -7,6 +7,7 @@ import dev.pepsi.questrank.core.model.Ranking;
 import dev.pepsi.questrank.core.score.RankingCalculator;
 import dev.pepsi.questrank.core.signature.CatalogFingerprint;
 import dev.pepsi.questrank.core.signature.DisplaySignature;
+import dev.pepsi.questrank.diagnostics.RankingDiagnostics;
 import dev.pepsi.questrank.integration.ftb.FtbCatalog;
 import java.util.List;
 import java.util.Objects;
@@ -93,6 +94,15 @@ public final class RankingService {
     private int displayTtlTicks = DISPLAY_TTL_TICKS;
     private int subscribers;
 
+    // Contadores de diagnóstico (G0); se reinician con cada instancia de servicio.
+    private long diagTicks;
+    private long diagCatalogCycles;
+    private long diagDisplayCycles;
+    private long diagRebuildAttempts;
+    private long diagRebuildSuccess;
+    private long diagRebuildPublished;
+    private String diagCause = "request";
+
     public RankingService(long epoch, CatalogSource catalogSource, ParticipantsSource participantsSource,
                           PolicySource policySource) {
         this.epoch = epoch;
@@ -138,6 +148,7 @@ public final class RankingService {
 
     /** Cronómetro por tick (§8.8): solo decrementa; los ciclos se disparan con suscriptores activos. */
     public void onTick() {
+        diagTicks++;
         catalogMemoTicks = decrement(catalogMemoTicks);
         displayMemoTicks = decrement(displayMemoTicks);
         debounceTicks = decrement(debounceTicks);
@@ -151,18 +162,22 @@ public final class RankingService {
         }
         if ((debounceTicks == 0 && eventsPending) || displayTtlTicks == 0) {
             eventsPending = false;
-            if (displayTtlTicks == 0) {
+            boolean displayTtl = displayTtlTicks == 0;
+            if (displayTtl) {
                 displayTtlTicks = DISPLAY_TTL_TICKS;
             }
+            diagCause = displayTtl ? "ttl-display" : (catalogReloadPending ? "catalog-reload" : "event");
             displayCycle();
         } else if (catalogTtlTicks == 0) {
             catalogTtlTicks = CATALOG_TTL_TICKS;
+            diagCause = "ttl-catalog";
             catalogCycle();
         }
     }
 
     /** Ciclo de display: validar y reconstruir (eventos agrupados o TTL de display, §8.11(b)). */
     private void displayCycle() {
+        diagDisplayCycles++;
         if (!validateCatalog(catalogReloadPending)) {
             return;
         }
@@ -172,6 +187,7 @@ public final class RankingService {
 
     /** Ciclo de catálogo: validar y reconstruir solo si F_cat cambió o hay suciedad pendiente. */
     private void catalogCycle() {
+        diagCatalogCycles++;
         if (!validateCatalog(false)) {
             return;
         }
@@ -186,6 +202,17 @@ public final class RankingService {
      * estado coherente.
      */
     public RankingResult requestState(Long knownEpoch, long knownRev) {
+        boolean diag = RankingDiagnostics.enabled();
+        long start = diag ? System.nanoTime() : 0L;
+        RankingResult result = requestStateInternal(knownEpoch, knownRev);
+        if (diag) {
+            RankingDiagnostics.requestPipeline(resultKind(result), System.nanoTime() - start);
+        }
+        return result;
+    }
+
+    private RankingResult requestStateInternal(Long knownEpoch, long knownRev) {
+        diagCause = "request";
         if (!validateCatalog(catalogReloadPending)) {
             return new RankingResult.Error(RankingResult.ErrorKind.CATALOG_UNAVAILABLE);
         }
@@ -206,6 +233,16 @@ public final class RankingService {
         return new RankingResult.Snapshot(current);
     }
 
+    private static String resultKind(RankingResult result) {
+        if (result instanceof RankingResult.Snapshot) {
+            return "snapshot";
+        }
+        if (result instanceof RankingResult.Unchanged) {
+            return "unchanged";
+        }
+        return "error";
+    }
+
     /**
      * §8.10(a). Devuelve {@code false} si el catálogo no está disponible (sin mutar estado y sin
      * memoizar el fallo). En éxito confirma F_cat y, si cambió, incrementa {@code catalogRevision},
@@ -216,22 +253,32 @@ public final class RankingService {
         if (!force && catalogMemoTicks > 0) {
             return true;
         }
+        boolean diag = RankingDiagnostics.enabled();
+        long readStart = diag ? System.nanoTime() : 0L;
         Optional<FtbCatalog> maybeCatalog = catalogSource.read();
+        long readNs = diag ? System.nanoTime() - readStart : 0L;
         if (maybeCatalog.isEmpty()) {
+            RankingDiagnostics.catalogValidate(false, false, catalogRevision, readNs, 0L, 0L);
             return false;
         }
         FtbCatalog catalog = maybeCatalog.get();
+        long fingerprintStart = diag ? System.nanoTime() : 0L;
         long fcat = CatalogFingerprint.compute(catalog.identity(), policySource.configRevision(), catalog.entries());
+        long fingerprintNs = diag ? System.nanoTime() - fingerprintStart : 0L;
         boolean changed = lastFCat == null || lastFCat.longValue() != fcat;
+        long universeNs = 0L;
         if (changed) {
             lastFCat = fcat;
             catalogRevision++;
+            long universeStart = diag ? System.nanoTime() : 0L;
             universe = ComputableUniverse.compute(policySource.policy(), catalog.entries());
+            universeNs = diag ? System.nanoTime() - universeStart : 0L;
             displayDirty = true;
         }
         catalogMemoTicks = CATALOG_MEMO_TICKS;
         catalogTtlTicks = CATALOG_TTL_TICKS;
         catalogReloadPending = false;
+        RankingDiagnostics.catalogValidate(true, changed, catalogRevision, readNs, fingerprintNs, universeNs);
         return true;
     }
 
@@ -242,17 +289,27 @@ public final class RankingService {
      * tras dejar el estado consistente.
      */
     private boolean rebuild() {
+        diagRebuildAttempts++;
         ComputableUniverse currentUniverse = universe;
         if (currentUniverse == null) {
             // Invariante interna: solo se reconstruye tras una validación con éxito.
             throw new IllegalStateException("QuestRank: rebuild requested before a successful catalog validation");
         }
+        boolean diag = RankingDiagnostics.enabled();
+        long participantsStart = diag ? System.nanoTime() : 0L;
         Optional<List<ParticipantData>> maybeParticipants = participantsSource.read();
+        long participantsNs = diag ? System.nanoTime() - participantsStart : 0L;
         if (maybeParticipants.isEmpty()) {
+            RankingDiagnostics.rebuild(false, 0, 0L, rev, catalogRevision, false,
+                    participantsNs, 0L, 0L, diagCause);
             return false;
         }
+        long scoreStart = diag ? System.nanoTime() : 0L;
         Ranking ranking = RankingCalculator.compute(currentUniverse, maybeParticipants.get());
+        long scoreNs = diag ? System.nanoTime() - scoreStart : 0L;
+        long signatureStart = diag ? System.nanoTime() : 0L;
         long sdisplay = DisplaySignature.compute(catalogRevision, ranking);
+        long signatureNs = diag ? System.nanoTime() - signatureStart : 0L;
         boolean published = false;
         if (lastSDisplay == null || lastSDisplay.longValue() != sdisplay) {
             lastSDisplay = sdisplay;
@@ -265,6 +322,12 @@ public final class RankingService {
         displayDirty = false;
         eventsPending = false;
         debounceTicks = 0;
+        diagRebuildSuccess++;
+        if (published) {
+            diagRebuildPublished++;
+        }
+        RankingDiagnostics.rebuild(true, maybeParticipants.get().size(), ranking.total(), rev,
+                catalogRevision, published, participantsNs, scoreNs, signatureNs, diagCause);
         if (published) {
             snapshotListener.onSnapshot(snapshot);
         }
@@ -286,5 +349,25 @@ public final class RankingService {
 
     ServiceSnapshot currentSnapshot() {
         return snapshot;
+    }
+
+    /** Contadores del escenario actual; se reinician con una instancia nueva del servicio. */
+    DiagnosticCounters diagnosticCounters() {
+        return new DiagnosticCounters(diagTicks, diagCatalogCycles, diagDisplayCycles,
+                diagRebuildAttempts, diagRebuildSuccess, diagRebuildPublished);
+    }
+
+    String diagnosticSummaryLine() {
+        return RankingDiagnostics.rankingSummaryLine(epoch, diagTicks, diagCatalogCycles, diagDisplayCycles,
+                diagRebuildAttempts, diagRebuildSuccess, diagRebuildPublished, rev, catalogRevision);
+    }
+
+    /** Resumen único a INFO; lo invoca el wiring al parar el servidor. */
+    void logDiagnosticSummary() {
+        RankingDiagnostics.logSummary(diagnosticSummaryLine());
+    }
+
+    record DiagnosticCounters(long ticks, long catalogCycles, long displayCycles,
+                              long rebuildAttempts, long rebuildSuccess, long rebuildPublished) {
     }
 }

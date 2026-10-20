@@ -1,6 +1,7 @@
 package dev.pepsi.questrank.client.net;
 
 import com.mojang.logging.LogUtils;
+import dev.pepsi.questrank.diagnostics.RankingDiagnostics;
 import dev.pepsi.questrank.net.ClientReceiverHook;
 import dev.pepsi.questrank.net.RankingErrorPayload;
 import dev.pepsi.questrank.net.RankingRequestPayload;
@@ -55,7 +56,7 @@ public final class ClientSyncHooks {
         ClientReceiverHook.install(new ClientReceiverHook.Receiver() {
             @Override
             public void onSnapshot(RankingSnapshotPayload payload) {
-                SESSION.onSnapshot(payload);
+                applyWithDiagnostics(SESSION, payload);
             }
 
             @Override
@@ -92,6 +93,21 @@ public final class ClientSyncHooks {
     /** F5-B: estado actual de sesión/datos. */
     public static ClientSessionView rankingView() {
         return SESSION.view();
+    }
+
+    /** Punto único de aplicación y diagnóstico; separado para poder probar el mapeo de outcomes. */
+    static void applyWithDiagnostics(ClientRankingSession session, RankingSnapshotPayload payload) {
+        if (!RankingDiagnostics.enabled()) {
+            session.onSnapshot(payload);
+            return;
+        }
+        ClientSessionView before = session.view();
+        long start = System.nanoTime();
+        ClientRankingSession.SnapshotOutcome outcome = session.onSnapshot(payload);
+        ClientSessionView after = session.view();
+        RankingDiagnostics.clientReceived(payload, before.knownEpoch(), before.knownRev(),
+                after.knownEpoch(), after.knownRev(), after.sessionValid(), outcome.name(),
+                System.nanoTime() - start);
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {

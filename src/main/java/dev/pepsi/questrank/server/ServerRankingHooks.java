@@ -73,6 +73,7 @@ public final class ServerRankingHooks {
     private static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         if (service != null) {
+            service.logDiagnosticSummary();
             LOGGER.warn("QuestRank: replacing a ranking service of a server that did not stop (defensive)");
             detach();
         }
@@ -90,6 +91,7 @@ public final class ServerRankingHooks {
 
     private static void onServerStopping(ServerStoppingEvent event) {
         if (service != null && boundServer == event.getServer()) {
+            service.logDiagnosticSummary();
             detach();
             LOGGER.info("QuestRank ranking service stopped");
         }

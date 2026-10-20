@@ -2,6 +2,7 @@ package dev.pepsi.questrank.client.ui;
 
 import dev.pepsi.questrank.client.net.ClientSessionView;
 import dev.pepsi.questrank.client.net.ClientSyncHooks;
+import dev.pepsi.questrank.diagnostics.RankingDiagnostics;
 import dev.pepsi.questrank.net.RankingSnapshotPayload;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -31,6 +32,8 @@ public final class RankingScreen extends Screen {
     private RankingLayout layout = new RankingLayout(0);
     private RankingSnapshotPayload cachedSnapshot;
     private RankingViewModel viewModel;
+    // Una instancia por pantalla: reabrir produce una nueva presentación de la misma revisión.
+    private final FirstPaintTracker firstPaintTracker = new FirstPaintTracker();
     private int selectedIndex = -1;
     private int[] retryBounds;
     private int[] refreshBounds;
@@ -62,6 +65,9 @@ public final class RankingScreen extends Screen {
         hoveredRow = null;
         ClientSessionView view = ClientSyncHooks.rankingView();
         updateViewModel(view);
+        boolean diag = RankingDiagnostics.enabled();
+        boolean paintPending = firstPaintTracker.hasPending();
+        long paintStart = diag && paintPending ? System.nanoTime() : 0L;
         RankingUiState state = RankingStateResolver.resolve(view);
 
         int panelWidth = QuestRankTheme.panelWidth(width);
@@ -114,18 +120,38 @@ public final class RankingScreen extends Screen {
         if (hoveredRow != null) {
             RankingRowRenderer.renderTooltip(graphics, font, hoveredRow, mouseX, mouseY);
         }
+        if (paintPending) {
+            if (cachedSnapshot == null) {
+                firstPaintTracker.clearPending();
+            } else {
+                FirstPaintTracker.SnapshotKey key = firstPaintTracker.claimIfCurrent(
+                        cachedSnapshot.epoch(), cachedSnapshot.rev());
+                if (diag && key != null) {
+                    int rows = viewModel == null ? 0 : viewModel.rows().size();
+                    RankingDiagnostics.uiFirstPaint(key.epoch(), key.rev(), rows, visibleRows(),
+                            System.nanoTime() - paintStart);
+                }
+            }
+        }
     }
 
     private void updateViewModel(ClientSessionView view) {
         if (!view.hasData()) {
             cachedSnapshot = null;
             viewModel = null;
+            firstPaintTracker.clearPending();
             return;
         }
         if (view.data() != cachedSnapshot) {
             cachedSnapshot = view.data();
+            boolean diag = RankingDiagnostics.enabled();
+            long modelStart = diag ? System.nanoTime() : 0L;
             viewModel = RankingViewModel.of(cachedSnapshot);
             int rowCount = viewModel.rows().size();
+            if (diag) {
+                RankingDiagnostics.uiModelBuilt(cachedSnapshot, rowCount, System.nanoTime() - modelStart);
+            }
+            firstPaintTracker.onModelBuilt(cachedSnapshot.epoch(), cachedSnapshot.rev());
             if (rowCount == 0) {
                 selectedIndex = -1;
             } else if (selectedIndex >= rowCount) {

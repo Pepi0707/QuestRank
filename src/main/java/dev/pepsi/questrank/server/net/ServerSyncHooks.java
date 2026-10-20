@@ -85,11 +85,28 @@ public final class ServerSyncHooks {
         if (sync != null && boundServer == server && boundRanking == service.get()) {
             return sync;
         }
+        ServerSyncService replacement = attachOrReplace(sync, boundServer, boundRanking, server, service.get());
         boundServer = server;
         boundRanking = service.get();
-        sync = new ServerSyncService(boundRanking, TRANSPORT, TIME);
+        sync = replacement;
         LOGGER.info("QuestRank server sync attached");
         return sync;
+    }
+
+    /**
+     * Decisión de enlace/reemplazo extraída para poder verificar que un sync anterior se desvincula
+     * (y resume) antes de crear el nuevo. {@code ensureAttached} usa esta misma ruta.
+     */
+    static ServerSyncService attachOrReplace(ServerSyncService current, MinecraftServer currentServer,
+                                              RankingService currentRanking, MinecraftServer server,
+                                              RankingService ranking) {
+        if (current != null && currentServer == server && currentRanking == ranking) {
+            return current;
+        }
+        if (current != null) {
+            current.detach();
+        }
+        return new ServerSyncService(ranking, TRANSPORT, TIME);
     }
 
     private static synchronized void onServerStopping(ServerStoppingEvent event) {
