@@ -23,7 +23,7 @@ public final class QuestRankTheme {
     public static final int PANEL_MIN_WIDTH = 300;
     public static final int PANEL_MAX_WIDTH = 440;
     public static final int PANEL_HORIZONTAL_MARGIN = 16;
-    public static final int ROW_HEIGHT = 34;
+    public static final int ROW_HEIGHT = 40;
     public static final int LEADER_ROW_HEIGHT = 40;
     public static final int FACE_SIZE = 16;
     public static final int PROGRESS_BAR_HEIGHT = 6;
@@ -42,8 +42,8 @@ public final class QuestRankTheme {
         return Math.min(width, Math.max(1, screenWidth - 8));
     }
 
-    /** Alto de fila: el líder puede ser ligeramente más alta (§10.3). */
+    /** Alto de fila uniforme; la jerarquía del líder se marca con acento, no con altura. */
     public static int rowHeight(int index) {
-        return index == 0 ? LEADER_ROW_HEIGHT : ROW_HEIGHT;
+        return ROW_HEIGHT;
     }
 }

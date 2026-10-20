@@ -56,7 +56,9 @@ public final class RankingRowRenderer {
             graphics.fill(cardRight - 1, rowY, cardRight, rowY + rowHeight - 2, QuestRankTheme.FOCUS);
         }
 
-        int nameY = rowY + (rowHeight - 8) / 2 - (row.index() == 0 ? 2 : 0);
+        int barY = rowY + rowHeight - 9;
+        // Mantiene el mismo hueco vertical nombre→barra en filas normales y en la fila líder.
+        int nameY = barY - 17;
         String rank = Integer.toString(row.index() + 1);
         int rankX = panelLeft + 10 + (RANK_WIDTH - font.width(rank)) / 2;
         graphics.drawString(font, rank, rankX, nameY, rankColor, false);
@@ -100,7 +102,6 @@ public final class RankingRowRenderer {
         graphics.drawString(font, percent, percentX, rowY + rowHeight - 13, QuestRankTheme.TEXT_MUTED, false);
 
         int barX = x;
-        int barY = rowY + rowHeight - 9;
         int barWidth = Math.max(0, scoreX - 6 - barX);
         graphics.fill(barX, barY, barX + barWidth, barY + QuestRankTheme.PROGRESS_BAR_HEIGHT,
                 QuestRankTheme.BORDER);

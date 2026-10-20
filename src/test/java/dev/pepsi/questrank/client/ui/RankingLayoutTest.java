@@ -18,11 +18,11 @@ class RankingLayoutTest {
     }
 
     @Test
-    void rowHeightsHaveTallerLeader() {
+    void rowHeightsAreUniform() {
         assertEquals(40, QuestRankTheme.rowHeight(0));
-        assertEquals(34, QuestRankTheme.rowHeight(1));
-        assertEquals(34, QuestRankTheme.rowHeight(500));
-        assertEquals(40 + 34 * 3, RankingLayout.totalHeight(4));
+        assertEquals(40, QuestRankTheme.rowHeight(1));
+        assertEquals(40, QuestRankTheme.rowHeight(500));
+        assertEquals(40 * 4, RankingLayout.totalHeight(4));
     }
 
     @Test
