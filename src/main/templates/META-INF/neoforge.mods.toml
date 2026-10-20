@@ -69,7 +69,7 @@ Server-authoritative ranking of FTB Quests progress for group teams and solo pla
     # Optional field describing why the dependency is required or why it is incompatible
     # reason="..."
     # The version range of the dependency
-    versionRange="[${neo_version},)" #mandatory
+    versionRange="[${neo_version}]" #mandatory; exact verified version
     # An ordering relationship for the dependency.
     # BEFORE - This mod is loaded BEFORE the dependency
     # AFTER - This mod is loaded AFTER the dependency
@@ -91,21 +91,21 @@ Server-authoritative ranking of FTB Quests progress for group teams and solo pla
 [[dependencies.${mod_id}]]
     modId="ftbquests"
     type="required"
-    versionRange="[${ftb_quests_version},)"
+    versionRange="[${ftb_quests_version}]"
     ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="ftbteams"
     type="required"
-    versionRange="[${ftb_teams_version},)"
+    versionRange="[${ftb_teams_version}]"
     ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="ftblibrary"
     type="required"
-    versionRange="[${ftb_library_version},)"
+    versionRange="[${ftb_library_version}]"
     ordering="AFTER"
     side="BOTH"
 
