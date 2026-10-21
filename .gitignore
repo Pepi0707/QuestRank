@@ -32,9 +32,14 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-### QuestRank ###
+### QuestRank local QA ###
 logs/
+*.log
 ranking_ingame*.png
+evidence/
+server/
+docs/questrank-icon-*.png
+AGENTS.md
 
 ### Minecraft Modding ###
 run/
